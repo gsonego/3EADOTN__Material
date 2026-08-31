@@ -1,0 +1,12 @@
+@model catalog_ui.Models.ErrorViewModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<div style="padding:60px 30px; color:var(--text-2);">
+    <div class="display" style="font-size:28px; color:var(--text);">SOMETHING WENT WRONG</div>
+    @if (Model.ShowRequestId)
+    {
+        <p class="mono" style="font-size:12px; color:var(--text-3); margin-top:12px;">Request ID: @Model.RequestId</p>
+    }
+</div>

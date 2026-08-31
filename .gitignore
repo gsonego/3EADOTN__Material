@@ -1,0 +1,7 @@
+bin/
+obj/
+.vs/
+*.user
+.playwright-mcp
+secrets.txt
+appsettings.Development.json

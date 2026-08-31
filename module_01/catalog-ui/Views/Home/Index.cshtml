@@ -1,0 +1,181 @@
+@{
+    ViewData["Title"] = "Catalog";
+}
+
+<div class="topbar">
+    <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e5484d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18"/><path d="M17 3v18"/><path d="M2 8h5"/><path d="M2 16h5"/><path d="M17 8h5"/><path d="M17 16h5"/></svg>
+        <div class="display">CATALOG</div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:12px;">
+        <div class="endpoint-pill" id="count-pill" title="Cached for 30s -- see how it changes as you add titles">
+            <span class="endpoint-dot" id="count-dot"></span>
+            <span class="mono" id="count-label" style="font-size:11.5px;">-- titles</span>
+        </div>
+        <button class="endpoint-pill" id="endpoint-pill" type="button">
+            <span class="endpoint-dot" id="endpoint-dot"></span>
+            <span class="mono" id="endpoint-label" style="font-size:11.5px;">No endpoint set</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#898781" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        </button>
+        <button class="btn btn-ghost" id="assistant-toggle" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Ask
+        </button>
+        <button class="btn btn-accent" id="add-title-btn" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Add Title
+        </button>
+    </div>
+</div>
+
+<div class="chip-row" id="genre-chips">
+    <button class="chip active" data-genre="">All</button>
+    @foreach (var genre in catalog_ui.Models.CatalogGenres.All)
+    {
+        <button class="chip" data-genre="@genre">@genre</button>
+    }
+</div>
+
+<div class="grid-wrap">
+    <div id="catalog-grid" class="poster-grid"></div>
+</div>
+
+<!-- Add/Edit Title modal -->
+<div class="modal-backdrop-custom" id="title-modal-backdrop">
+    <div class="modal-panel" style="display:flex;">
+        <div style="width:200px; flex-shrink:0; padding:24px 0 24px 24px;">
+            <div id="poster-preview" style="aspect-ratio:2/3; border-radius:8px; background:#1e1e21; position:relative; overflow:hidden; background-size:cover; background-position:center;">
+                <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; background:rgba(0,0,0,0.25);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v9"/><path d="m22 21-8-9-6 6-3-3-2 2"/></svg>
+                    <span style="font-size:11px; color:white; font-weight:500;">Choose poster</span>
+                </div>
+            </div>
+            <input type="file" id="poster-file-input" accept="image/*" style="display:none;" />
+            <div style="font-size:10.5px; color:var(--text-3); text-align:center; margin-top:8px;">Optional &middot; JPG or PNG</div>
+        </div>
+
+        <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+            <div class="modal-header">
+                <div class="display" id="title-modal-heading" style="font-size:22px;">ADD TITLE</div>
+                <button class="close-x" type="button" data-close-modal="title-modal-backdrop">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <form id="title-form" class="modal-body" style="flex:1;">
+                <input type="hidden" id="title-id" />
+                <div class="field">
+                    <label>Title</label>
+                    <input type="text" id="title-name" required />
+                </div>
+                <div class="two-col">
+                    <div class="field">
+                        <label>Genre</label>
+                        <select id="title-genre">
+                            @foreach (var genre in catalog_ui.Models.CatalogGenres.All)
+                            {
+                                <option value="@genre">@genre</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Year</label>
+                        <input type="text" id="title-year" class="mono" />
+                    </div>
+                </div>
+                <div class="field" style="flex:1;">
+                    <label>Description</label>
+                    <textarea id="title-description" rows="4"></textarea>
+                </div>
+                <div class="error-state" id="title-form-error" style="display:none; padding:8px 0; text-align:left; font-size:12px;"></div>
+            </form>
+
+            <div class="modal-footer">
+                <button class="btn btn-ghost" type="button" data-close-modal="title-modal-backdrop">Cancel</button>
+                <button class="btn btn-accent" type="button" id="title-save-btn">Save changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Endpoint settings modal -->
+<div class="modal-backdrop-custom" id="settings-modal-backdrop" style="justify-content:flex-end; padding-right:30px;">
+    <div class="modal-panel narrow">
+        <div class="modal-header">
+            <div>
+                <div class="display" style="font-size:19px;">API ENDPOINT</div>
+                <div style="font-size:12px; color:var(--text-3); margin-top:3px;">Point this app at your own deployed Catalog API. Saved on this device only.</div>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="field">
+                <label>Base URL</label>
+                <input type="text" id="settings-base-url" class="mono" placeholder="https://your-api.azure-api.net" />
+            </div>
+            <div class="field">
+                <label>Subscription key</label>
+                <input type="password" id="settings-api-key" class="mono" />
+            </div>
+            <div class="status-line">
+                <span class="endpoint-dot" id="settings-status-dot"></span>
+                <span id="settings-status-text">Not tested yet</span>
+            </div>
+        </div>
+        <div class="modal-footer between">
+            <button class="btn btn-ghost" type="button" id="test-connection-btn">Test connection</button>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-ghost" type="button" data-close-modal="settings-modal-backdrop">Cancel</button>
+                <button class="btn btn-accent" type="button" id="settings-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Module 6: the Assistant drawer. Everything a student edits in this module
+     lives in this panel -- the system prompt, the grounding switch, the memory
+     switch. No application code is touched during the lab. -->
+<div class="assistant-drawer" id="assistant-drawer">
+    <div class="assistant-header">
+        <div>
+            <div class="display" style="font-size:19px;">ASSISTANT</div>
+            <div style="font-size:11.5px; color:var(--text-3); margin-top:2px;">Your prompt is saved on this device only.</div>
+        </div>
+        <button class="close-x" type="button" id="assistant-close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+        </button>
+    </div>
+
+    <div class="assistant-config">
+        <button class="assistant-config-toggle" type="button" id="assistant-config-toggle">
+            <span>Instructions &amp; context</span>
+            <span class="mono" id="assistant-config-summary">plain, no catalog</span>
+        </button>
+        <div class="assistant-config-body" id="assistant-config-body">
+            <div class="field">
+                <label>System prompt &mdash; the app&rsquo;s instructions to the model</label>
+                <textarea id="assistant-system-prompt" rows="7" placeholder="You are the assistant for our film catalog app. Answer the customer's question."></textarea>
+            </div>
+            <label class="assistant-switch">
+                <input type="checkbox" id="assistant-grounded" />
+                <span>Send the catalog as context</span>
+            </label>
+            <label class="assistant-switch">
+                <input type="checkbox" id="assistant-memory" checked />
+                <span>Send the conversation so far</span>
+            </label>
+            <div style="display:flex; gap:8px; margin-top:2px;">
+                <button class="btn btn-ghost" type="button" id="assistant-reset" style="font-size:12px; padding:6px 12px;">Clear conversation</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="assistant-transcript" id="assistant-transcript"></div>
+
+    <div class="assistant-stats mono" id="assistant-stats">&nbsp;</div>
+
+    <div class="assistant-composer">
+        <textarea id="assistant-input" rows="2" placeholder="Ask about the catalog&hellip;"></textarea>
+        <button class="btn btn-accent" type="button" id="assistant-send">Send</button>
+    </div>
+</div>
