@@ -12,20 +12,20 @@ This module continues directly in the shared course resource group from Modules 
 
 Two different questions get conflated constantly, and Azure treats them as two entirely separate mechanisms.
 
-|                | Authentication (AuthN) | Authorization (AuthZ)          |
-| -------------- | ---------------------- | ------------------------------ |
-| **Question**   | "Who are you?"         | "What are you allowed to do?"  |
-| **Handled by** | Microsoft Entra ID     | RBAC role assignments          |
-| **Result**     | A verified identity    | Allowed / denied, per resource |
+| | Authentication (AuthN) | Authorization (AuthZ) |
+|---|---|---|
+| **Question** | "Who are you?" | "What are you allowed to do?" |
+| **Handled by** | Microsoft Entra ID | RBAC role assignments |
+| **Result** | A verified identity | Allowed / denied, per resource |
 
 An identity can pass AuthN and still fail AuthZ — that's not a bug, it's the whole point of splitting them. The class already saw this twice without the vocabulary for it: Module 1's App Service and Container Apps deploys both needed **explicit registry credentials** to pull the Catalog images from a private ACR — the registry didn't just trust "your own" resources by default (an AuthN/AuthZ setup problem, solved there with an admin username/password). Module 2's Blob Storage demo showed **Owner** (a control-plane role) failing to authorize a data-plane operation — you were a fully authenticated Owner, but blob upload was still denied until the right data-plane role was granted (AuthZ). Today's demo makes a failure like that deliberate and then fixes it live — and along the way, removes the registry-credential workaround from Module 1 entirely.
 
 **Managed Identity** is Azure's answer to machine-to-machine AuthN: an identity Azure creates and manages for a specific resource, with no password that ever exists for a human to type, store, or leak.
 
-| Type                | What it is                                                                              |
-| ------------------- | --------------------------------------------------------------------------------------- |
+| Type | What it is |
+|---|---|
 | **System-assigned** | Tied to one resource's lifecycle — created and destroyed with it. Used in today's demo. |
-| **User-assigned**   | A standalone identity created once and attached to several resources.                   |
+| **User-assigned** | A standalone identity created once and attached to several resources. |
 
 That identity has two possible destinations:
 
@@ -36,10 +36,10 @@ Today's demo shows both: the Key Vault fallback first (2.2), then the direct pat
 
 **RBAC** governs AuthZ, and it has a hard split worth repeating from Module 2:
 
-|                   | Control plane                       | Data plane                                                                                                |
-| ----------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Manages**       | The resource itself (create/delete) | The data inside it (read/write)                                                                           |
-| **Example roles** | Owner, Contributor                  | Storage Blob Data Contributor, Key Vault Secrets User/Officer, Cosmos DB Built-in Data Reader/Contributor |
+| | Control plane | Data plane |
+|---|---|---|
+| **Manages** | The resource itself (create/delete) | The data inside it (read/write) |
+| **Example roles** | Owner, Contributor | Storage Blob Data Contributor, Key Vault Secrets User/Officer, Cosmos DB Built-in Data Reader/Contributor |
 
 Owner on a subscription or resource group never implies data-plane access. This was true for Blob Storage (Module 2) and is equally true for Key Vault and Cosmos DB's data-plane roles (this module — and note the Cosmos DB data-plane roles use their own separate command, `az cosmosdb sql role assignment create`, not the generic `az role assignment create`).
 
@@ -55,11 +55,11 @@ Three parts, each built and verified before the next: Key Vault first (the class
 
 A hardened, audited store for secrets, keys, and certificates — not a general-purpose database. Three things it holds:
 
-| Type             | Examples                                                              |
-| ---------------- | --------------------------------------------------------------------- |
-| **Secrets**      | Connection strings, API keys, passwords — arbitrary strings           |
-| **Keys**         | Cryptographic keys for encrypt/sign — material never leaves the vault |
-| **Certificates** | TLS certs, with auto-renewal                                          |
+| Type | Examples |
+|---|---|
+| **Secrets** | Connection strings, API keys, passwords — arbitrary strings |
+| **Keys** | Cryptographic keys for encrypt/sign — material never leaves the vault |
+| **Certificates** | TLS certs, with auto-renewal |
 
 Two setup details break the demo if missed:
 
@@ -94,44 +94,38 @@ $KV = "kv-estiam-dev-2"
 az keyvault create --name $KV --resource-group $RG --location $LOCATION --enable-rbac-authorization true
 ```
 
-Prints your own object id, needed for the role assignment below:
+Fetches your own object id and the vault's resource id — both needed for the role assignment below:
 
 ```powershell
-az ad signed-in-user show --query id --output tsv
+$MY_OBJECT_ID = az ad signed-in-user show --query id --output tsv
 ```
 
-Gets the vault's resource id, needed for the role assignment below:
-
 ```powershell
-az keyvault show --name $KV --resource-group $RG --query id --output tsv
+$VAULT_ID = az keyvault show --name $KV --resource-group $RG --query id --output tsv
 ```
 
-Grants yourself Key Vault Secrets Officer — without this, writing the secret below fails despite being Owner, the control-plane/data-plane split again.:
+Grants yourself Key Vault Secrets Officer — without this, writing the secret below fails despite being Owner, the control-plane/data-plane split again:
 
 ```powershell
-az role assignment create --role "Key Vault Secrets Officer" --assignee <your-object-id> --scope <vault-resource-id>
+az role assignment create --role "Key Vault Secrets Officer" --assignee $MY_OBJECT_ID --scope $VAULT_ID
 ```
 
-Prints the real Cosmos DB connection string — using the real connection string makes the payoff concrete: the app securely reaches the database it already built:
+Fetches the real Cosmos DB connection string — using the real connection string makes the payoff concrete: the app securely reaches the database it already built:
 
 ```powershell
-az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
+$COSMOS_CONN = az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
 ```
 
 Writes it into the vault as a secret:
 
 ```powershell
-az keyvault secret set --vault-name $KV --name CosmosConnectionString --value "<connection string>"
+az keyvault secret set --vault-name $KV --name CosmosConnectionString --value $COSMOS_CONN
 ```
 
-Enables a system-assigned Managed Identity on the Container App — **save the `principalId`** from the output, needed for the role assignment below and reused in 2.3:
+Enables a system-assigned Managed Identity on the Container App and captures its `principalId` — needed for the role assignment below and reused in 2.3/2.4:
 
 ```powershell
-az containerapp identity assign --name $APP --resource-group $RG --system-assigned
-```
-
-```powershell
-az containerapp identity show --name $APP --resource-group $RG --query principalId --output tsv
+$APP_PRINCIPAL_ID = az containerapp identity assign --name $APP --resource-group $RG --system-assigned --query principalId --output tsv
 ```
 
 Do this deliberately before granting the role below (skip ahead and come back): wires the Key Vault secret into the Container App, and watch it fail outright — `ERROR: ... Unable to get value using Managed identity system for secret cosmos-conn`. Unlike a Function App's `@Microsoft.KeyVault(...)` app setting (which resolves lazily and fails silently at runtime), Container Apps validates Key Vault access **at secret-creation time** — the whole command errors, confirmed live testing this step:
@@ -143,14 +137,14 @@ az containerapp secret set --name $APP --resource-group $RG --secrets "cosmos-co
 This is the AuthZ fix — grants the Container App's identity read access to the vault. RBAC propagation took under a minute in testing:
 
 ```powershell
-az keyvault show --name $KV --resource-group $RG --query id --output tsv
+az role assignment create --role "Key Vault Secrets User" --assignee $APP_PRINCIPAL_ID --scope $VAULT_ID
 ```
+
+Re-run the `az containerapp secret set` command above — it now succeeds. Build and push `catalog-api-v5` (run from `catalog-api-v5/`) — re-run `az acr login` first if the terminal session is new since Module 1/2, or if the push below fails with an authentication error:
 
 ```powershell
-az role assignment create --role "Key Vault Secrets User" --assignee <container-app-principal-id> --scope <vault-resource-id>
+az acr login --name $ACR
 ```
-
-Re-run the `az containerapp secret set` command above — it now succeeds. Build and push `catalog-api-v5` (run from `catalog-api-v5/`):
 
 ```powershell
 docker build -t "${ACR}.azurecr.io/catalog-api:v5" .
@@ -160,16 +154,28 @@ docker build -t "${ACR}.azurecr.io/catalog-api:v5" .
 docker push "${ACR}.azurecr.io/catalog-api:v5"
 ```
 
-Deploys the new image — **`CosmosDb__ConnectionString` now points at `secretref:cosmos-conn`, not a literal value**, so Container Apps resolves it from the secret configured above. `BlobStorage__*` is unchanged from `v4`:
+`BlobStorage__*` is unchanged from `v4` — `$STORAGE_CONN` from Module 2 doesn't survive closing the terminal, so re-fetch it if you're picking the course back up on a new day:
 
 ```powershell
-az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v5" --set-env-vars "CosmosDb__ConnectionString=secretref:cosmos-conn" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=<storage connection string>" "BlobStorage__ContainerName=posters"
+$STORAGE_CONN = az storage account show-connection-string --name $STORAGE --resource-group $RG --query connectionString --output tsv
+```
+
+Deploys the new image — **`CosmosDb__ConnectionString` now points at `secretref:cosmos-conn`, not a literal value**, so Container Apps resolves it from the secret configured above:
+
+```powershell
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v5" --set-env-vars "CosmosDb__ConnectionString=secretref:cosmos-conn" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=$STORAGE_CONN" "BlobStorage__ContainerName=posters"
+```
+
+No `--revision-suffix` was passed above, so fetch the new revision as the most recently created one:
+
+```powershell
+$NEW_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
 ```
 
 Moves traffic to the new revision:
 
 ```powershell
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight <new-revision-name>=100
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 Open the deployed `catalog-ui` and confirm real Cosmos DB titles still load. Confirmed live: real data came back through the full chain — `catalog-ui` → `catalog-api-v5` → Key Vault (via Managed Identity) → Cosmos DB — with no connection string anywhere in the app's configuration.
@@ -184,30 +190,24 @@ Cosmos DB's data-plane roles use their **own command**, not the generic `az role
 az cosmosdb sql role definition list --account-name $COSMOS --resource-group $RG --query "[].{Name:roleName, Id:id}" -o table
 ```
 
+Fetches the Data Contributor role's id directly, rather than copying it from the table above:
+
+```powershell
+$COSMOS_ROLE_ID = az cosmosdb sql role definition list --account-name $COSMOS --resource-group $RG --query "[?roleName=='Cosmos DB Built-in Data Contributor'].id | [0]" --output tsv
+```
+
 `catalog-api-v6` is already set up to authenticate to Cosmos DB directly via `DefaultAzureCredential` — no connection string, no Key Vault.
 
 Grants yourself the Data Contributor role — needed so the Container App's identity (and your own `az login` session, for anyone running it locally) can authenticate. `--scope "/"` means the whole account — a real deployment might scope this to one database/container instead:
 
 ```powershell
-az ad signed-in-user show --query id --output tsv
+az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id $COSMOS_ROLE_ID --principal-id $MY_OBJECT_ID --scope "/"
 ```
 
-```powershell
-az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id <Data Contributor id> --principal-id <your-object-id> --scope "/"
-```
-
-Grants the same role to the Container App's managed identity from 2.2 — this is what lets the _deployed_ app skip Key Vault entirely:
+Grants the same role to the Container App's managed identity from 2.2 — this is what lets the *deployed* app skip Key Vault entirely:
 
 ```powershell
-az containerapp identity show --name $APP --resource-group $RG --query principalId --output tsv
-```
-
-```powershell
-az cosmosdb show --name $COSMOS --resource-group $RG --query documentEndpoint --output tsv
-```
-
-```powershell
-az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id <Data Contributor id> --principal-id <container-app-principal-id> --scope "/"
+az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id $COSMOS_ROLE_ID --principal-id $APP_PRINCIPAL_ID --scope "/"
 ```
 
 Build and push the image:
@@ -220,16 +220,28 @@ docker build -t "${ACR}.azurecr.io/catalog-api:v6" .
 docker push "${ACR}.azurecr.io/catalog-api:v6"
 ```
 
+Fetches the Cosmos DB account endpoint — the direct-auth path needs the URL, not a connection string:
+
+```powershell
+$COSMOS_ENDPOINT = az cosmosdb show --name $COSMOS --resource-group $RG --query documentEndpoint --output tsv
+```
+
 Deploys — the Key Vault secret reference (`cosmos-conn`) from 2.2 is no longer used by this revision; it's fine to leave it configured on the app for now, nothing references it:
 
 ```powershell
-az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v6" --set-env-vars "CosmosDb__AccountEndpoint=<endpoint>" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=<...>" "BlobStorage__ContainerName=posters" --remove-env-vars "CosmosDb__ConnectionString"
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v6" --set-env-vars "CosmosDb__AccountEndpoint=$COSMOS_ENDPOINT" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=$STORAGE_CONN" "BlobStorage__ContainerName=posters" --remove-env-vars "CosmosDb__ConnectionString"
+```
+
+No `--revision-suffix` was passed above, so fetch the new revision as the most recently created one:
+
+```powershell
+$NEW_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
 ```
 
 Moves traffic to the new revision:
 
 ```powershell
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight <new-revision-name>=100
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 Open `catalog-ui` again and confirm real titles still load — same check as 2.2, this time with **zero secrets** involved in reaching Cosmos DB.
@@ -240,10 +252,16 @@ One more Entra-ID-aware service was sitting in the stack the whole time, unnotic
 
 **Container App**
 
+Fetches the ACR's resource id — needed for both role assignments in this section:
+
+```powershell
+$ACR_ID = az acr show --name $ACR --resource-group $RG --query id --output tsv
+```
+
 Grants `AcrPull` to the Container App's identity from 2.2/2.3 — one identity, three different destinations across this module:
 
 ```powershell
-az role assignment create --role "AcrPull" --assignee <container-app-principal-id> --scope <acr-resource-id>
+az role assignment create --role "AcrPull" --assignee $APP_PRINCIPAL_ID --scope $ACR_ID
 ```
 
 Switches the registry auth to that identity — the registry entry now shows `"identity": "system"` with empty username/password. This command group is in preview (`az containerapp registry` — noted by the CLI itself):
@@ -260,16 +278,16 @@ az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.
 
 **App Service**
 
-Enables a system-assigned Managed Identity on the Web App — a separate identity from the Container App's, each resource gets its own:
+Enables a system-assigned Managed Identity on the Web App and captures its `principalId` — a separate identity from the Container App's, each resource gets its own:
 
 ```powershell
-az webapp identity assign --name $WEBAPP --resource-group $RG
+$WEBAPP_PRINCIPAL_ID = az webapp identity assign --name $WEBAPP --resource-group $RG --query principalId --output tsv
 ```
 
 Grants it `AcrPull`:
 
 ```powershell
-az role assignment create --role "AcrPull" --assignee <webapp-principal-id> --scope <acr-resource-id>
+az role assignment create --role "AcrPull" --assignee $WEBAPP_PRINCIPAL_ID --scope $ACR_ID
 ```
 
 Switches the App Service's registry auth to that identity — dedicated flags exist for this (`--acr-use-identity`, `--acr-identity`), no need for the generic `--generic-configurations` JSON escape-hatch:
@@ -315,10 +333,8 @@ Not live-tested this module — covered conceptually. Managed Identity only solv
 - **App Registration** — represents the application itself in Entra ID, so users can sign into it (distinct from a Managed Identity, which represents one Azure resource).
 - **OAuth2 / OpenID Connect** — the protocol: sign in once, receive a temporary token (a JWT), attach it as a `Bearer` header on every subsequent request instead of re-entering credentials.
 - **In .NET**, `Microsoft.Identity.Web` + the `[Authorize]` attribute handle almost all of this via configuration, not hand-rolled code.
-- **Simplest possible case**: App Service's built-in **Authentication ("Easy Auth")** toggle requires no code at all — worth demonstrating live in a future session if time allows, by enabling it on `$WEBAPP` and watching the login redirect happen.
-
-If time permits in class: enable Easy Auth on the Catalog UI's App Service (`$WEBAPP`) and show the forced Microsoft login redirect. No CLI sequence has been tested for this yet in the current environment — `az webapp auth update --name $WEBAPP --resource-group $RG --enabled true` is the relevant command if attempted live, but it stays untested and out of `commands.md` until it actually is (see the module-revision process: no speculative commands in the manual).
+- **Simplest possible case**: App Service's built-in **Authentication ("Easy Auth")** toggle requires no code at all — it forces the Microsoft sign-in redirect just by being enabled on the App Service.
 
 #### Issues & Fixes — Topic 3
 
-- None — conceptual only; the one command mentioned (`az webapp auth update`) has not been run live, so it's excluded from `commands.md` per the module-revision process.
+- None — conceptual only, no live demo in this module.

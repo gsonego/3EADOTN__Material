@@ -11,27 +11,35 @@ az provider show --namespace Microsoft.KeyVault --query registrationState --outp
 ```
 
 ```
+$KV = "kv-estiam-dev-2"
+```
+
+```
 az keyvault create --name $KV --resource-group $RG --location $LOCATION --enable-rbac-authorization true
 ```
 
 ```
-az ad signed-in-user show --query id --output tsv
+$MY_OBJECT_ID = az ad signed-in-user show --query id --output tsv
 ```
 
 ```
-az role assignment create --role "Key Vault Secrets Officer" --assignee <your-object-id> --scope <vault-resource-id>
+$VAULT_ID = az keyvault show --name $KV --resource-group $RG --query id --output tsv
 ```
 
 ```
-az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
+az role assignment create --role "Key Vault Secrets Officer" --assignee $MY_OBJECT_ID --scope $VAULT_ID
 ```
 
 ```
-az keyvault secret set --vault-name $KV --name CosmosConnectionString --value "<connection string>"
+$COSMOS_CONN = az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
 ```
 
 ```
-az containerapp identity assign --name $APP --resource-group $RG --system-assigned
+az keyvault secret set --vault-name $KV --name CosmosConnectionString --value $COSMOS_CONN
+```
+
+```
+$APP_PRINCIPAL_ID = az containerapp identity assign --name $APP --resource-group $RG --system-assigned --query principalId --output tsv
 ```
 
 ```
@@ -39,7 +47,7 @@ az containerapp secret set --name $APP --resource-group $RG --secrets "cosmos-co
 ```
 
 ```
-az role assignment create --role "Key Vault Secrets User" --assignee <container-app-principal-id> --scope <vault-resource-id>
+az role assignment create --role "Key Vault Secrets User" --assignee $APP_PRINCIPAL_ID --scope $VAULT_ID
 ```
 
 ```
@@ -55,23 +63,19 @@ docker push "${ACR}.azurecr.io/catalog-api:v5"
 ```
 
 ```
-az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v5" --set-env-vars "CosmosDb__ConnectionString=secretref:cosmos-conn" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=<storage connection string>" "BlobStorage__ContainerName=posters"
+$STORAGE_CONN = az storage account show-connection-string --name $STORAGE --resource-group $RG --query connectionString --output tsv
 ```
 
 ```
-curl "https://app-estiam-dev-2--0000005.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io/titles"
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v5" --set-env-vars "CosmosDb__ConnectionString=secretref:cosmos-conn" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=$STORAGE_CONN" "BlobStorage__ContainerName=posters"
 ```
 
 ```
-az containerapp revision list --name $APP --resource-group $RG --query "[].{Revision:name, Active:properties.active, Traffic:properties.trafficWeight, Image:properties.template.containers[0].image}" --output table
+$NEW_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
 ```
 
 ```
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight app-estiam-dev-2--0000005=100
-```
-
-```
-curl "https://webapp-estiam-dev-2.azurewebsites.net/api/titles" -H "X-Catalog-Base-Url: https://app-estiam-dev-2.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io"
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 ## 2.3 Upgrade — Cosmos DB direct via Managed Identity
@@ -81,27 +85,15 @@ az cosmosdb sql role definition list --account-name $COSMOS --resource-group $RG
 ```
 
 ```
-az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id <Cosmos DB Built-in Data Contributor id> --principal-id <your-object-id> --scope "/"
+$COSMOS_ROLE_ID = az cosmosdb sql role definition list --account-name $COSMOS --resource-group $RG --query "[?roleName=='Cosmos DB Built-in Data Contributor'].id | [0]" --output tsv
 ```
 
 ```
-az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id <Cosmos DB Built-in Data Contributor id> --principal-id <container-app-principal-id> --scope "/"
+az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id $COSMOS_ROLE_ID --principal-id $MY_OBJECT_ID --scope "/"
 ```
 
 ```
-dotnet add package Azure.Identity
-```
-
-```
-dotnet build
-```
-
-```
-dotnet run --urls http://localhost:5097
-```
-
-```
-curl http://localhost:5097/titles
+az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id $COSMOS_ROLE_ID --principal-id $APP_PRINCIPAL_ID --scope "/"
 ```
 
 ```
@@ -113,19 +105,19 @@ docker push "${ACR}.azurecr.io/catalog-api:v6"
 ```
 
 ```
-az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v6" --set-env-vars "CosmosDb__AccountEndpoint=<cosmos account endpoint>" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=<storage connection string>" "BlobStorage__ContainerName=posters" --remove-env-vars "CosmosDb__ConnectionString"
+$COSMOS_ENDPOINT = az cosmosdb show --name $COSMOS --resource-group $RG --query documentEndpoint --output tsv
 ```
 
 ```
-curl "https://app-estiam-dev-2--0000006.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io/titles"
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v6" --set-env-vars "CosmosDb__AccountEndpoint=$COSMOS_ENDPOINT" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=$STORAGE_CONN" "BlobStorage__ContainerName=posters" --remove-env-vars "CosmosDb__ConnectionString"
 ```
 
 ```
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight app-estiam-dev-2--0000006=100
+$NEW_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
 ```
 
 ```
-curl "https://webapp-estiam-dev-2.azurewebsites.net/api/titles" -H "X-Catalog-Base-Url: https://app-estiam-dev-2.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io"
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 ## 2.4 Upgrade — ACR pull via Managed Identity (closing a Module 1 gotcha)
@@ -133,7 +125,11 @@ curl "https://webapp-estiam-dev-2.azurewebsites.net/api/titles" -H "X-Catalog-Ba
 **Container App**
 
 ```
-az role assignment create --role "AcrPull" --assignee <container-app-principal-id> --scope <acr-resource-id>
+$ACR_ID = az acr show --name $ACR --resource-group $RG --query id --output tsv
+```
+
+```
+az role assignment create --role "AcrPull" --assignee $APP_PRINCIPAL_ID --scope $ACR_ID
 ```
 
 ```
@@ -144,22 +140,14 @@ az containerapp registry set --name $APP --resource-group $RG --server "${ACR}.a
 az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v6" --revision-suffix acrmi
 ```
 
-```
-curl "https://app-estiam-dev-2--acrmi.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io/titles"
-```
-
-```
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight app-estiam-dev-2--acrmi=100
-```
-
 **App Service**
 
 ```
-az webapp identity assign --name $WEBAPP --resource-group $RG
+$WEBAPP_PRINCIPAL_ID = az webapp identity assign --name $WEBAPP --resource-group $RG --query principalId --output tsv
 ```
 
 ```
-az role assignment create --role "AcrPull" --assignee <webapp-principal-id> --scope <acr-resource-id>
+az role assignment create --role "AcrPull" --assignee $WEBAPP_PRINCIPAL_ID --scope $ACR_ID
 ```
 
 ```
@@ -176,8 +164,4 @@ az acr update --name $ACR --admin-enabled false
 
 ```
 az webapp restart --name $WEBAPP --resource-group $RG
-```
-
-```
-curl "https://$WEBAPP.azurewebsites.net/api/titles" -H "X-Catalog-Base-Url: https://app-estiam-dev-2.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io"
 ```

@@ -11,6 +11,10 @@ az provider show --namespace Microsoft.DocumentDB --query registrationState --ou
 ```
 
 ```
+$COSMOS = "cosmos-estiam-dev-2"
+```
+
+```
 az cosmosdb create --name $COSMOS --resource-group $RG --locations regionName=$LOCATION --default-consistency-level Session --kind GlobalDocumentDB
 ```
 
@@ -23,7 +27,7 @@ az cosmosdb sql container create --account-name $COSMOS --resource-group $RG --d
 ```
 
 ```
-az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
+$COSMOS_CONN = az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
 ```
 
 ```
@@ -39,7 +43,7 @@ docker push "${ACR}.azurecr.io/catalog-api:v3"
 ```
 
 ```
-az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v3" --set-env-vars "CosmosDb__ConnectionString=<connection string>" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles"
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v3" --set-env-vars "CosmosDb__ConnectionString=$COSMOS_CONN" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles"
 ```
 
 ```
@@ -47,18 +51,18 @@ az containerapp revision list --name $APP --resource-group $RG --query "[].{Revi
 ```
 
 ```
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight app-estiam-dev-2--0000003=100
+$NEW_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
 ```
 
 ```
-curl "https://webapp-estiam-dev-2.azurewebsites.net/api/titles" -H "X-Catalog-Base-Url: https://app-estiam-dev-2.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io"
-```
-
-```
-curl -X POST "https://webapp-estiam-dev-2.azurewebsites.net/api/titles" -H "X-Catalog-Base-Url: https://app-estiam-dev-2.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io" -H "Content-Type: application/json" -d "{\"title\":\"Deep Current\",\"genre\":\"Documentary\",\"year\":2025,\"description\":\"Following a research vessel through the Pacific's deepest trenches.\"}"
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 ## Topic 2 — Azure Blob Storage
+
+```
+$STORAGE = "stestiamdev2"
+```
 
 ```
 az storage account create --name $STORAGE --resource-group $RG --location $LOCATION --sku Standard_LRS
@@ -73,19 +77,35 @@ az storage blob upload --account-name $STORAGE --container-name posters --name h
 ```
 
 ```
-az storage account show --name $STORAGE --resource-group $RG --query id --output tsv
+$MY_OBJECT_ID = az ad signed-in-user show --query id --output tsv
 ```
 
 ```
-az role assignment create --role "Storage Blob Data Contributor" --assignee <your-user-or-object-id> --scope <storage-account-resource-id>
+$STORAGE_ID = az storage account show --name $STORAGE --resource-group $RG --query id --output tsv
 ```
 
 ```
-az storage blob url --account-name $STORAGE --container-name posters --name hello.txt --output tsv
+az role assignment create --role "Storage Blob Data Contributor" --assignee $MY_OBJECT_ID --scope $STORAGE_ID
 ```
 
 ```
-az storage blob generate-sas --account-name $STORAGE --container-name posters --name hello.txt --permissions r --expiry <UTC datetime> --https-only --auth-mode login --as-user --output tsv
+$BLOB_URL = az storage blob url --account-name $STORAGE --container-name posters --name hello.txt --output tsv
+```
+
+```
+$SAS_EXPIRY = (Get-Date).ToUniversalTime().AddHours(1).ToString("yyyy-MM-ddTHH:mm:ssZ")
+```
+
+```
+$SAS_TOKEN = az storage blob generate-sas --account-name $STORAGE --container-name posters --name hello.txt --permissions r --expiry $SAS_EXPIRY --https-only --auth-mode login --as-user --output tsv
+```
+
+```
+$FULL_URL = "$BLOB_URL`?$SAS_TOKEN"
+```
+
+```
+Start-Process $FULL_URL
 ```
 
 ```
@@ -97,13 +117,17 @@ docker push "${ACR}.azurecr.io/catalog-api:v4"
 ```
 
 ```
-az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v4" --set-env-vars "CosmosDb__ConnectionString=<connection string>" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=<storage connection string>" "BlobStorage__ContainerName=posters"
+$STORAGE_CONN = az storage account show-connection-string --name $STORAGE --resource-group $RG --query connectionString --output tsv
 ```
 
 ```
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight app-estiam-dev-2--0000004=100
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v4" --set-env-vars "CosmosDb__ConnectionString=$COSMOS_CONN" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=$STORAGE_CONN" "BlobStorage__ContainerName=posters"
 ```
 
 ```
-curl -X POST "https://webapp-estiam-dev-2.azurewebsites.net/api/titles/<id>/poster" -H "X-Catalog-Base-Url: https://app-estiam-dev-2.delightfulgrass-32a51ddf.westcentralus.azurecontainerapps.io" -F "file=@poster.png;type=image/png"
+$NEW_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
+```
+
+```
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```

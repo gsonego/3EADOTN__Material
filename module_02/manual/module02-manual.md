@@ -12,26 +12,26 @@ This module continues directly in the shared course resource group from Module 1
 
 Cosmos DB is Azure's globally distributed, multi-model NoSQL database. This course uses the SQL (Core) API — the native, default API that pairs directly with the .NET SDK. Four ideas matter:
 
-| Level         | What it is                                                                | Demo mapping                                                                                  |
-| ------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **Account**   | The top-level resource — the whole database service instance.             | `cosmos-estiam-dev-2`                                                                         |
-| **Database**  | A namespace inside the account. No pricing/scaling of its own by default. | `CatalogDb`                                                                                   |
-| **Container** | Where data actually lives — and where the partition key is defined.       | `Titles` (partition key: `/genre`)                                                            |
-| **Item**      | One JSON document. Schema-free — fields can vary between items.           | `{ "id", "title", "genre", "year", "description", "posterUrl" }` — the Catalog's title record |
+| Level | What it is | Demo mapping |
+|-------|------------|---------------|
+| **Account** | The top-level resource — the whole database service instance. | `cosmos-estiam-dev-2` |
+| **Database** | A namespace inside the account. No pricing/scaling of its own by default. | `CatalogDb` |
+| **Container** | Where data actually lives — and where the partition key is defined. | `Titles` (partition key: `/genre`) |
+| **Item** | One JSON document. Schema-free — fields can vary between items. | `{ "id", "title", "genre", "year", "description", "posterUrl" }` — the Catalog's title record |
 
 **Partition key:** spreads items across physical storage so reads/writes can run in parallel. A good key has many distinct values that match your dominant query pattern (e.g. `customerId`, `category`). A key with very few distinct values — or one dominant value — creates a "hot partition": most traffic lands on one physical partition and throttles, even while others sit idle. This is a design decision made once; changing it later means migrating data into a new container.
 
-**Honest trade-off, not a best practice:** `/genre` is used here because it matches the Catalog UI's existing genre-filter chips, which makes the demo intuitive — but with only ~6 genres, it's a low-cardinality key. A production catalog with millions of titles would likely partition by `id` (or something with far more distinct values) and let genre filtering happen as a query, not a partition boundary. Good discussion point: ask what a real streaming service's title catalog would key on instead.
+**Honest trade-off, not a best practice:** `/genre` is used here because it matches the Catalog UI's existing genre-filter chips, which makes the demo intuitive — but with only ~6 genres, it's a low-cardinality key. So what would a real streaming service's title catalog key on instead? Almost certainly `id` (or something with far more distinct values), with genre filtering handled as a query rather than a partition boundary.
 
 **RU/s (Request Units per second):** every operation costs RUs — a point read might cost ~1, a write more, a cross-partition query more still. RU/s is your throughput budget per second, either provisioned up front, autoscaled, or fully serverless (pay-per-request). Exceeding it throttles requests (HTTP 429) rather than failing outright — the SDK retries automatically by default.
 
-| Consistency level                   | Guarantee                                                | Trade-off                                                          |
-| ----------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Strong**                          | Reads always see the latest committed write, everywhere. | Highest latency, lowest availability during regional failover.     |
-| **Bounded Staleness**               | Reads lag writes by a fixed time or version window.      | Predictable staleness, still fairly strict.                        |
-| **Session** (default, used in demo) | A single client always sees its own writes.              | Best real-world balance — used unless you need stricter or looser. |
-| **Consistent Prefix**               | Reads never see writes out of order.                     | Order guaranteed; some staleness allowed.                          |
-| **Eventual**                        | All replicas converge — eventually.                      | Fastest, cheapest — fine for non-critical data like like-counts.   |
+| Consistency level | Guarantee | Trade-off |
+|--------------------|-----------|-----------|
+| **Strong** | Reads always see the latest committed write, everywhere. | Highest latency, lowest availability during regional failover. |
+| **Bounded Staleness** | Reads lag writes by a fixed time or version window. | Predictable staleness, still fairly strict. |
+| **Session** (default, used in demo) | A single client always sees its own writes. | Best real-world balance — used unless you need stricter or looser. |
+| **Consistent Prefix** | Reads never see writes out of order. | Order guaranteed; some staleness allowed. |
+| **Eventual** | All replicas converge — eventually. | Fastest, cheapest — fine for non-critical data like like-counts. |
 
 ### 1.2 Live demo — CLI: create the account, database & container
 
@@ -73,20 +73,20 @@ Creates the container, with the partition key path set to `/genre` and the minim
 az cosmosdb sql container create --account-name $COSMOS --resource-group $RG --database-name CatalogDb --name Titles --partition-key-path "/genre" --throughput 400
 ```
 
-Prints the primary connection string — it carries a master key with full read/write access to the whole account. Never commit it to source control; it goes into `appsettings.json`/`appsettings.Development.json`, both of which should be gitignored (Module 3's Managed Identity removes the need for this secret entirely):
+Fetches the primary connection string into a variable — it carries a master key with full read/write access to the whole account. Never commit it to source control or print it to a shared screen; it goes into `appsettings.json`/`appsettings.Development.json`, both of which should be gitignored (Module 3's Managed Identity removes the need for this secret entirely):
 
 ```powershell
-az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
+$COSMOS_CONN = az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
 ```
 
 ### 1.3 Live demo — real persistence in the Catalog API
 
-`catalog-api-v3` is already set up with real Cosmos DB persistence behind `GET/POST/PUT/DELETE /titles` — `catalog-api-v2` stays exactly as Module 1 left it, live and untouched. Worth knowing when you demo it: the route for `PUT`/`DELETE` only carries the title's `id`, not its `genre` — since `genre` is the partition key, and Cosmos doesn't support changing a partition key in place, changing a title's genre in the UI is a delete on the old partition followed by a create on the new one, same `id`. A good moment to connect back to 1.1's partition-key discussion — this is the concrete cost of that design decision.
+`catalog-api-v3` is already set up with real Cosmos DB persistence behind `GET/POST/PUT/DELETE /titles` — `catalog-api-v2` stays exactly as Module 1 left it, live and untouched. The route for `PUT`/`DELETE` only carries the title's `id`, not its `genre` — since `genre` is the partition key, and Cosmos doesn't support changing a partition key in place, changing a title's genre in the UI is a delete on the old partition followed by a create on the new one, same `id`. This is the concrete cost of 1.1's partition-key choice.
 
-Build, push, and deploy `catalog-api-v3` on its own — Blob Storage (Section 2.3) is a **separate release** (`catalog-api-v4`), deployed and verified only after this one is confirmed working, not bundled into the same deploy:
+Build, push, and deploy `catalog-api-v3` on its own — Blob Storage (Section 2.3) is a **separate release** (`catalog-api-v4`), deployed and verified only after this one is confirmed working, not bundled into the same deploy. Module 1's `az acr login` session doesn't survive closing the terminal — re-run it if picking the course back up on a new day, or if the push below fails with an authentication error:
 
 ```powershell
- az acr login --name $ACR
+az acr login --name $ACR
 ```
 
 ```powershell
@@ -98,19 +98,25 @@ docker push "${ACR}.azurecr.io/catalog-api:v3"
 ```
 
 ```powershell
-az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v3" --set-env-vars "CosmosDb__ConnectionString=<connection string from 1.2>" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles"
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v3" --set-env-vars "CosmosDb__ConnectionString=$COSMOS_CONN" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles"
 ```
 
-Lists the revisions, so you have the new one's exact name for the next step:
+Lists the revisions — useful to see the new one land at 0% traffic:
 
 ```powershell
 az containerapp revision list --name $APP --resource-group $RG --query "[].{Revision:name, Active:properties.active, Traffic:properties.trafficWeight, Image:properties.template.containers[0].image}" --output table
 ```
 
+No `--revision-suffix` was passed above, so the new revision's name is auto-generated rather than something you chose — fetch it as the most recently created revision:
+
+```powershell
+$NEW_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
+```
+
 Moves traffic to the new revision:
 
 ```powershell
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight <new-revision-name>=100
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 Open the deployed `catalog-ui` (Section 4, Module 1) and confirm its poster grid populates from real Cosmos DB data for the first time — add a title through the UI, refresh, it's still there.
@@ -125,21 +131,21 @@ Open the deployed `catalog-ui` (Section 4, Module 1) and confirm its poster grid
 
 Blob Storage is Azure's object store for files of any type — photos, PDFs, videos, backups. Simpler hierarchy than Cosmos DB: no partition key concept, containers are just namespaces.
 
-| Level               | What it is                                                   | Demo mapping                                                                                                                                                                                         |
-| ------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Storage account** | The top-level resource — the whole storage service instance. | `stestiamdev2`                                                                                                                                                                                       |
-| **Container**       | A namespace inside the account. No further nesting.          | `posters` — the same container used for both this mechanics demo and the Catalog app's real poster uploads (Section 2.3), deliberately, so the demo exercises the real thing rather than a throwaway |
-| **Blob**            | One file, any type or size.                                  | `hello.txt` for this demo (any file works to show the mechanics); a title's poster image once the app is wired up                                                                                    |
+| Level | What it is | Demo mapping |
+|-------|------------|---------------|
+| **Storage account** | The top-level resource — the whole storage service instance. | `stestiamdev2` |
+| **Container** | A namespace inside the account. No further nesting. | `posters` — the same container used for both this mechanics demo and the Catalog app's real poster uploads (Section 2.3), deliberately, so the demo exercises the real thing rather than a throwaway |
+| **Blob** | One file, any type or size. | `hello.txt` for this demo (any file works to show the mechanics); a title's poster image once the app is wired up |
 
 Blobs are private by default — nobody outside your account can open one directly, even with the exact URL.
 
-| Tier        | Best for                                            | Storage / access cost                                      |
-| ----------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| **Hot**     | Files touched constantly (this week's uploads).     | Highest storage cost, cheapest & instant access.           |
-| **Cool**    | Rarely touched, might be needed soon (30+ days).    | Lower storage cost, costs more per access, still instant.  |
+| Tier | Best for | Storage / access cost |
+|------|----------|-------------------------|
+| **Hot** | Files touched constantly (this week's uploads). | Highest storage cost, cheapest & instant access. |
+| **Cool** | Rarely touched, might be needed soon (30+ days). | Lower storage cost, costs more per access, still instant. |
 | **Archive** | Long-term backups, compliance, rarely-if-ever read. | Lowest storage cost by far — but retrieval can take hours. |
 
-_Conceptual only this module — no live demo of tier changes (`az storage blob set-tier` if a student asks). Netflix analogy: new releases sit on Hot storage, the back-catalog sits in cheaper Cool/Archive storage — same content, different access pattern._
+*Conceptual only this module — no live demo of tier changes (`az storage blob set-tier` if a student asks). Netflix analogy: new releases sit on Hot storage, the back-catalog sits in cheaper Cool/Archive storage — same content, different access pattern.*
 
 ### 2.2 Live demo — SAS tokens: create, upload, private-by-default, generate access
 
@@ -155,7 +161,7 @@ $STORAGE = "stestiamdev2"
 az storage account create --name $STORAGE --resource-group $RG --location $LOCATION --sku Standard_LRS
 ```
 
-Creates the `posters` container — the same container used for both this mechanics demo and the Catalog app's real poster uploads (Section 2.3), deliberately, so the demo exercises the real thing rather than a throwaway. This step succeeded even _before_ the role granted below was assigned — container create doesn't need the data-plane role, only blob upload does:
+Creates the `posters` container — the same container used for both this mechanics demo and the Catalog app's real poster uploads (Section 2.3), deliberately, so the demo exercises the real thing rather than a throwaway. This step succeeded even *before* the role granted below was assigned — container create doesn't need the data-plane role, only blob upload does:
 
 ```powershell
 az storage container create --name posters --account-name $STORAGE --auth-mode login
@@ -167,41 +173,53 @@ Uploads a test file (run from `materials/module_02/`, where `hello.txt` lives) �
 az storage blob upload --account-name $STORAGE --container-name posters --name hello.txt --file hello.txt --auth-mode login
 ```
 
-`--auth-mode login` uses Azure AD authorization, which is SEPARATE from the account-level Owner role. Even as subscription Owner, the upload above was denied until the **"Storage Blob Data Contributor"** role was explicitly assigned. Azure splits control-plane permissions (Owner/Contributor — manage the resource itself) from data-plane permissions (Storage Blob Data Contributor/Reader — touch the data inside it), and not every container/blob operation draws that line in the same place — a natural preview of Module 3 (Security/RBAC). Gets the storage account's resource id, needed for the role assignment:
+`--auth-mode login` uses Azure AD authorization, which is SEPARATE from the account-level Owner role. Even as subscription Owner, the upload above was denied until the **"Storage Blob Data Contributor"** role was explicitly assigned. Azure splits control-plane permissions (Owner/Contributor — manage the resource itself) from data-plane permissions (Storage Blob Data Contributor/Reader — touch the data inside it), and not every container/blob operation draws that line in the same place — a natural preview of Module 3 (Security/RBAC). A role assignment needs both who (your own object id) and where (the storage account's resource id) — fetch both:
 
 ```powershell
-az ad signed-in-user show --query id -o tsv
+$MY_OBJECT_ID = az ad signed-in-user show --query id --output tsv
 ```
 
 ```powershell
-az storage account show --name $STORAGE --resource-group $RG --query id --output tsv
+$STORAGE_ID = az storage account show --name $STORAGE --resource-group $RG --query id --output tsv
 ```
 
 Grants yourself the role — RBAC took under a minute to take effect when tested; re-running the upload command above after this succeeds:
 
 ```powershell
-az role assignment create --role "Storage Blob Data Contributor" --assignee <your-user-or-object-id> --scope <storage-account-resource-id>
-
-az role assignment create --role "Storage Blob Data Reader" --assignee <your-user-or-object-id> --scope <storage-account-resource-id>
+az role assignment create --role "Storage Blob Data Contributor" --assignee $MY_OBJECT_ID --scope $STORAGE_ID
 ```
 
-Prints the blob's plain URL:
+Fetches the blob's plain URL:
 
 ```powershell
-az storage blob url --account-name $STORAGE --container-name posters --name hello.txt --output tsv
+$BLOB_URL = az storage blob url --account-name $STORAGE --container-name posters --name hello.txt --output tsv
 ```
 
-Paste it into a browser — confirmed HTTP 409 `PublicAccessNotPermitted`. Good visual before the SAS token below. Generates a read-only SAS token (query-string portion only) — compute `--expiry` relative to the actual demo time (e.g. 1 hour ahead), don't hardcode a fixed timestamp:
+Paste it into a browser — confirmed HTTP 409 `PublicAccessNotPermitted`. Good visual before the SAS token below. Computes an expiry an hour ahead of the actual demo time — never hardcode a fixed timestamp, it'll be in the past by the time you teach this again:
 
 ```powershell
-az storage blob generate-sas --account-name $STORAGE --container-name posters --name hello.txt --permissions r --expiry <UTC datetime> --https-only --auth-mode login --as-user --output tsv
+$SAS_EXPIRY = (Get-Date).ToUniversalTime().AddHours(1).ToString("yyyy-MM-ddTHH:mm:ssZ")
 ```
 
-Append the token to the plain URL from above as `<blob-url>?<sas-token>` and open it in a browser — now it works. If the very first try 403s, see the clock-skew note below.
+Generates a read-only SAS token (query-string portion only):
+
+```powershell
+$SAS_TOKEN = az storage blob generate-sas --account-name $STORAGE --container-name posters --name hello.txt --permissions r --expiry $SAS_EXPIRY --https-only --auth-mode login --as-user --output tsv
+```
+
+Assembles the full URL and opens it — now it works. If the very first try 403s, see the clock-skew note below:
+
+```powershell
+$FULL_URL = "$BLOB_URL`?$SAS_TOKEN"
+```
+
+```powershell
+Start-Process $FULL_URL
+```
 
 #### Issues & Fixes — Topic 2
 
-- **User-delegation SAS clock skew:** the very first request against a freshly generated `--as-user` SAS can 403 with `AuthenticationFailed` / "Signature not valid in the specified key time frame" — the delegation key's start time (`skt`) can land a second or so after the token was generated, and the request can arrive before that instant. Waiting a few seconds and retrying the _same_ URL (no need to regenerate) resolves it. Worth showing live — it looks alarming the first time.
+- **User-delegation SAS clock skew:** the very first request against a freshly generated `--as-user` SAS can 403 with `AuthenticationFailed` / "Signature not valid in the specified key time frame" — the delegation key's start time (`skt`) can land a second or so after the token was generated, and the request can arrive before that instant. Waiting a few seconds and retrying the *same* URL (no need to regenerate) resolves it. Worth showing live — it looks alarming the first time.
 
 ### 2.3 Live demo — poster upload in the Catalog API
 
@@ -217,22 +235,26 @@ docker build -t "${ACR}.azurecr.io/catalog-api:v4" .
 docker push "${ACR}.azurecr.io/catalog-api:v4"
 ```
 
+The app now needs a Blob Storage connection string too — fetch it the same way as the Cosmos one above (`$COSMOS_CONN` was captured in 1.2 and doesn't survive closing the terminal, so re-run that command as well if you're picking the course back up on a new day):
+
 ```powershell
-az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
+$STORAGE_CONN = az storage account show-connection-string --name $STORAGE --resource-group $RG --query connectionString --output tsv
 ```
 
 ```powershell
-az storage account show-connection-string --name $STORAGE --resource-group $RG --query connectionString --output tsv
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v4" --set-env-vars "CosmosDb__ConnectionString=$COSMOS_CONN" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=$STORAGE_CONN" "BlobStorage__ContainerName=posters"
 ```
 
+No `--revision-suffix` was passed above, so fetch the new revision the same way as Section 1.2 — the most recently created one:
+
 ```powershell
-az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v4" --set-env-vars "CosmosDb__ConnectionString=<...>" "CosmosDb__DatabaseName=CatalogDb" "CosmosDb__ContainerName=Titles" "BlobStorage__ConnectionString=<storage connection string>" "BlobStorage__ContainerName=posters"
+$NEW_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
 ```
 
 Moves traffic to the new revision:
 
 ```powershell
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight <new-revision-name>=100
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 ### 2.4 End-to-end verification

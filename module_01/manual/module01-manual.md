@@ -252,6 +252,9 @@ Registers the providers this topic needs — the Container Apps platform itself,
 
 ```powershell
 az provider register --namespace Microsoft.App
+```
+
+```powershell
 az provider register --namespace Microsoft.OperationalInsights
 ```
 
@@ -259,6 +262,9 @@ Builds and pushes the Catalog API image (from the `catalog-api` project folder, 
 
 ```powershell
 docker build -t "${ACR}.azurecr.io/catalog-api:v1" .
+```
+
+```powershell
 docker push "${ACR}.azurecr.io/catalog-api:v1"
 ```
 
@@ -314,6 +320,9 @@ To avoid live-editing code mid-demo, `v2` is a **separate project folder** (`cat
 
 ```powershell
 docker build -t "${ACR}.azurecr.io/catalog-api:v2" .
+```
+
+```powershell
 docker push "${ACR}.azurecr.io/catalog-api:v2"
 ```
 
@@ -323,22 +332,34 @@ Switches the app into **multiple** revision mode, so old and new revisions can r
 az containerapp revision set-mode --name $APP --resource-group $RG --mode multiple
 ```
 
+The `--revision-suffix` you pass is exactly the revision's name suffix, so the new revision's full name is deterministic — no need to look it up:
+
+```powershell
+$NEW_REVISION = "${APP}--v2"
+```
+
 Deploys the v2 image as a new revision:
 
 ```powershell
 az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v2" --revision-suffix v2
 ```
 
-The new revision comes up at **0% traffic** — nothing changes for callers yet. Lists both revisions and their current traffic weight, so you have their exact names for the next step:
+The new revision comes up at **0% traffic** — nothing changes for callers yet. Lists both revisions and their current traffic weight, so you can see the split before/after each step below:
 
 ```powershell
 az containerapp revision list --name $APP --resource-group $RG --query "[].{Revision:name, Active:properties.active, Traffic:properties.trafficWeight}" --output table
 ```
 
-Splits traffic 50/50 between the old and new revisions — replace `<old-revision>`/`<new-revision>` with the names from the list above (the original revision is typically named `<app-name>--0000001`, the new one `<app-name>--v2`):
+The old revision's name is auto-generated (not something you chose), so fetch it instead of reading it off the table above — it's whichever revision isn't `$NEW_REVISION`:
 
 ```powershell
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight <old-revision>=50 <new-revision>=50
+$OLD_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "[?name!='$NEW_REVISION'].name | [0]" --output tsv
+```
+
+Splits traffic 50/50 between the old and new revisions:
+
+```powershell
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$OLD_REVISION=50" "$NEW_REVISION=50"
 ```
 
 Call the app's URL a few times in a row — the JSON `version` field should flip between `v1` and `v2` roughly evenly, and only the `v2` responses have a working `/titles` endpoint.
@@ -346,7 +367,7 @@ Call the app's URL a few times in a row — the JSON `version` field should flip
 Once you're confident the new revision is healthy, shift all traffic to it — this is the Container Apps equivalent of an App Service slot swap:
 
 ```powershell
-az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight <new-revision>=100
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 Open the Catalog UI again (Section 4) — with all traffic now on `v2`, its poster grid should actually populate from `GET /titles` for the first time.

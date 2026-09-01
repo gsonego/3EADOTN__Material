@@ -27,7 +27,12 @@ az account set --subscription "<name-or-id>"
 ## Resource Groups
 
 ```
-az group create --name rg-estiam-dev-2 --location westcentralus
+$LOCATION = "westcentralus"
+$RG = "rg-estiam-dev-2"
+```
+
+```
+az group create --name $RG --location $LOCATION
 ```
 
 ```
@@ -47,31 +52,43 @@ az provider show --namespace <Provider.Namespace> --query registrationState --ou
 ## Topic 1 — Deploy Applications with Azure App Service
 
 ```
-az appservice plan create --resource-group rg-estiam-dev-2 --name asp-estiam-dev-2 --sku B1 --is-linux --location westcentralus
+$PLAN = "asp-estiam-dev-2"
+```
+
+```
+az appservice plan create --resource-group $RG --name $PLAN --sku B1 --is-linux --location $LOCATION
 ```
 
 ```
 az provider register --namespace Microsoft.ContainerRegistry
-az acr create --resource-group rg-estiam-dev-2 --name acrestiamdev2 --sku Basic --location westcentralus
+$ACR = "acrestiamdev2"
+az acr create --resource-group $RG --name $ACR --sku Basic --location $LOCATION
 ```
 
 ```
-az acr login --name acrestiamdev2
-docker build -t acrestiamdev2.azurecr.io/catalog-ui:v1 .
-docker push acrestiamdev2.azurecr.io/catalog-ui:v1
+az acr login --name $ACR
+docker build -t "${ACR}.azurecr.io/catalog-ui:v1" .
+docker push "${ACR}.azurecr.io/catalog-ui:v1"
 ```
 
 ```
-az acr update --name acrestiamdev2 --admin-enabled true
-az acr credential show --name acrestiamdev2 --query "passwords[0].value" --output tsv
+az acr update --name $ACR --admin-enabled true
 ```
 
 ```
-az webapp create --name webapp-estiam-dev-2 --plan asp-estiam-dev-2 --resource-group rg-estiam-dev-2 --deployment-container-image-name acrestiamdev2.azurecr.io/catalog-ui:v1
+$WEBAPP = "webapp-estiam-dev-2"
 ```
 
 ```
-az webapp config container set --name webapp-estiam-dev-2 --resource-group rg-estiam-dev-2 --container-image-name acrestiamdev2.azurecr.io/catalog-ui:v1 --container-registry-url https://acrestiamdev2.azurecr.io --container-registry-user acrestiamdev2 --container-registry-password "<password from the previous command>"
+az webapp create --name $WEBAPP --plan $PLAN --resource-group $RG --deployment-container-image-name "${ACR}.azurecr.io/catalog-ui:v1"
+```
+
+```
+az webapp config container set --name $WEBAPP --resource-group $RG --container-image-name "${ACR}.azurecr.io/catalog-ui:v1" --container-registry-url "https://${ACR}.azurecr.io" --container-registry-user $ACR --container-registry-password (az acr credential show --name $ACR --resource-group $RG --query "passwords[0].value" --output tsv)
+```
+
+```
+echo "https://${WEBAPP}.azurewebsites.net"
 ```
 
 ## Topic 2 — Implement Containerized Solutions
@@ -82,45 +99,74 @@ az extension add --name containerapp --upgrade
 
 ```
 az provider register --namespace Microsoft.App
+```
+
+```
 az provider register --namespace Microsoft.OperationalInsights
 ```
 
 ```
-docker build -t acrestiamdev2.azurecr.io/catalog-api:v1 .
-docker push acrestiamdev2.azurecr.io/catalog-api:v1
+docker build -t "${ACR}.azurecr.io/catalog-api:v1" .
 ```
 
 ```
-az containerapp env create --name env-estiam-dev-2 --resource-group rg-estiam-dev-2 --location westcentralus
+docker push "${ACR}.azurecr.io/catalog-api:v1"
 ```
 
 ```
-az containerapp create --name app-estiam-dev-2 --resource-group rg-estiam-dev-2 --environment env-estiam-dev-2 --image acrestiamdev2.azurecr.io/catalog-api:v1 --target-port 8080 --ingress external --registry-server acrestiamdev2.azurecr.io --registry-username acrestiamdev2 --registry-password "<password from Section 4>" --query properties.configuration.ingress.fqdn
+$ENVNAME = "env-estiam-dev-2"
 ```
 
 ```
-docker build -t acrestiamdev2.azurecr.io/catalog-api:v2 .
-docker push acrestiamdev2.azurecr.io/catalog-api:v2
+az containerapp env create --name $ENVNAME --resource-group $RG --location $LOCATION
 ```
 
 ```
-az containerapp revision set-mode --name app-estiam-dev-2 --resource-group rg-estiam-dev-2 --mode multiple
+$APP = "app-estiam-dev-2"
 ```
 
 ```
-az containerapp update --name app-estiam-dev-2 --resource-group rg-estiam-dev-2 --image acrestiamdev2.azurecr.io/catalog-api:v2 --revision-suffix v2
+$ACR_PASSWORD = az acr credential show --name $ACR --resource-group $RG --query "passwords[0].value" --output tsv
 ```
 
 ```
-az containerapp revision list --name app-estiam-dev-2 --resource-group rg-estiam-dev-2 --query "[].{Revision:name, Active:properties.active, Traffic:properties.trafficWeight}" --output table
+az containerapp create --name $APP --resource-group $RG --environment $ENVNAME --image "${ACR}.azurecr.io/catalog-api:v1" --target-port 8080 --ingress external --registry-server "${ACR}.azurecr.io" --registry-username $ACR --registry-password $ACR_PASSWORD --query properties.configuration.ingress.fqdn
 ```
 
 ```
-az containerapp ingress traffic set --name app-estiam-dev-2 --resource-group rg-estiam-dev-2 --revision-weight <old-revision>=50 <new-revision>=50
+docker build -t "${ACR}.azurecr.io/catalog-api:v2" .
 ```
 
 ```
-az containerapp ingress traffic set --name app-estiam-dev-2 --resource-group rg-estiam-dev-2 --revision-weight <new-revision>=100
+docker push "${ACR}.azurecr.io/catalog-api:v2"
+```
+
+```
+az containerapp revision set-mode --name $APP --resource-group $RG --mode multiple
+```
+
+```
+$NEW_REVISION = "${APP}--v2"
+```
+
+```
+az containerapp update --name $APP --resource-group $RG --image "${ACR}.azurecr.io/catalog-api:v2" --revision-suffix v2
+```
+
+```
+az containerapp revision list --name $APP --resource-group $RG --query "[].{Revision:name, Active:properties.active, Traffic:properties.trafficWeight}" --output table
+```
+
+```
+$OLD_REVISION = az containerapp revision list --name $APP --resource-group $RG --query "[?name!='$NEW_REVISION'].name | [0]" --output tsv
+```
+
+```
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$OLD_REVISION=50" "$NEW_REVISION=50"
+```
+
+```
+az containerapp ingress traffic set --name $APP --resource-group $RG --revision-weight "$NEW_REVISION=100"
 ```
 
 ## Reference
@@ -130,5 +176,5 @@ az account list-locations --query "[].{Name:name, DisplayName:displayName}" --ou
 ```
 
 ```
-az group delete --name rg-estiam-dev-2 --yes --no-wait
+az group delete --name $RG --yes --no-wait
 ```
