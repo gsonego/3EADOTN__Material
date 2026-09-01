@@ -12,12 +12,12 @@ This module continues directly in the shared course resource group from Module 1
 
 Cosmos DB is Azure's globally distributed, multi-model NoSQL database. This course uses the SQL (Core) API — the native, default API that pairs directly with the .NET SDK. Four ideas matter:
 
-| Level | What it is | Demo mapping |
-|-------|------------|---------------|
-| **Account** | The top-level resource — the whole database service instance. | `cosmos-estiam-dev-2` |
-| **Database** | A namespace inside the account. No pricing/scaling of its own by default. | `CatalogDb` |
-| **Container** | Where data actually lives — and where the partition key is defined. | `Titles` (partition key: `/genre`) |
-| **Item** | One JSON document. Schema-free — fields can vary between items. | `{ "id", "title", "genre", "year", "description", "posterUrl" }` — the Catalog's title record |
+| Level         | What it is                                                                | Demo mapping                                                                                  |
+| ------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **Account**   | The top-level resource — the whole database service instance.             | `cosmos-estiam-dev-2`                                                                         |
+| **Database**  | A namespace inside the account. No pricing/scaling of its own by default. | `CatalogDb`                                                                                   |
+| **Container** | Where data actually lives — and where the partition key is defined.       | `Titles` (partition key: `/genre`)                                                            |
+| **Item**      | One JSON document. Schema-free — fields can vary between items.           | `{ "id", "title", "genre", "year", "description", "posterUrl" }` — the Catalog's title record |
 
 **Partition key:** spreads items across physical storage so reads/writes can run in parallel. A good key has many distinct values that match your dominant query pattern (e.g. `customerId`, `category`). A key with very few distinct values — or one dominant value — creates a "hot partition": most traffic lands on one physical partition and throttles, even while others sit idle. This is a design decision made once; changing it later means migrating data into a new container.
 
@@ -25,13 +25,13 @@ Cosmos DB is Azure's globally distributed, multi-model NoSQL database. This cour
 
 **RU/s (Request Units per second):** every operation costs RUs — a point read might cost ~1, a write more, a cross-partition query more still. RU/s is your throughput budget per second, either provisioned up front, autoscaled, or fully serverless (pay-per-request). Exceeding it throttles requests (HTTP 429) rather than failing outright — the SDK retries automatically by default.
 
-| Consistency level | Guarantee | Trade-off |
-|--------------------|-----------|-----------|
-| **Strong** | Reads always see the latest committed write, everywhere. | Highest latency, lowest availability during regional failover. |
-| **Bounded Staleness** | Reads lag writes by a fixed time or version window. | Predictable staleness, still fairly strict. |
-| **Session** (default, used in demo) | A single client always sees its own writes. | Best real-world balance — used unless you need stricter or looser. |
-| **Consistent Prefix** | Reads never see writes out of order. | Order guaranteed; some staleness allowed. |
-| **Eventual** | All replicas converge — eventually. | Fastest, cheapest — fine for non-critical data like like-counts. |
+| Consistency level                   | Guarantee                                                | Trade-off                                                          |
+| ----------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Strong**                          | Reads always see the latest committed write, everywhere. | Highest latency, lowest availability during regional failover.     |
+| **Bounded Staleness**               | Reads lag writes by a fixed time or version window.      | Predictable staleness, still fairly strict.                        |
+| **Session** (default, used in demo) | A single client always sees its own writes.              | Best real-world balance — used unless you need stricter or looser. |
+| **Consistent Prefix**               | Reads never see writes out of order.                     | Order guaranteed; some staleness allowed.                          |
+| **Eventual**                        | All replicas converge — eventually.                      | Fastest, cheapest — fine for non-critical data like like-counts.   |
 
 ### 1.2 Live demo — CLI: create the account, database & container
 
@@ -86,6 +86,10 @@ az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group 
 Build, push, and deploy `catalog-api-v3` on its own — Blob Storage (Section 2.3) is a **separate release** (`catalog-api-v4`), deployed and verified only after this one is confirmed working, not bundled into the same deploy:
 
 ```powershell
+ az acr login --name $ACR
+```
+
+```powershell
 docker build -t "${ACR}.azurecr.io/catalog-api:v3" .
 ```
 
@@ -121,21 +125,21 @@ Open the deployed `catalog-ui` (Section 4, Module 1) and confirm its poster grid
 
 Blob Storage is Azure's object store for files of any type — photos, PDFs, videos, backups. Simpler hierarchy than Cosmos DB: no partition key concept, containers are just namespaces.
 
-| Level | What it is | Demo mapping |
-|-------|------------|---------------|
-| **Storage account** | The top-level resource — the whole storage service instance. | `stestiamdev2` |
-| **Container** | A namespace inside the account. No further nesting. | `posters` — the same container used for both this mechanics demo and the Catalog app's real poster uploads (Section 2.3), deliberately, so the demo exercises the real thing rather than a throwaway |
-| **Blob** | One file, any type or size. | `hello.txt` for this demo (any file works to show the mechanics); a title's poster image once the app is wired up |
+| Level               | What it is                                                   | Demo mapping                                                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Storage account** | The top-level resource — the whole storage service instance. | `stestiamdev2`                                                                                                                                                                                       |
+| **Container**       | A namespace inside the account. No further nesting.          | `posters` — the same container used for both this mechanics demo and the Catalog app's real poster uploads (Section 2.3), deliberately, so the demo exercises the real thing rather than a throwaway |
+| **Blob**            | One file, any type or size.                                  | `hello.txt` for this demo (any file works to show the mechanics); a title's poster image once the app is wired up                                                                                    |
 
 Blobs are private by default — nobody outside your account can open one directly, even with the exact URL.
 
-| Tier | Best for | Storage / access cost |
-|------|----------|-------------------------|
-| **Hot** | Files touched constantly (this week's uploads). | Highest storage cost, cheapest & instant access. |
-| **Cool** | Rarely touched, might be needed soon (30+ days). | Lower storage cost, costs more per access, still instant. |
+| Tier        | Best for                                            | Storage / access cost                                      |
+| ----------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| **Hot**     | Files touched constantly (this week's uploads).     | Highest storage cost, cheapest & instant access.           |
+| **Cool**    | Rarely touched, might be needed soon (30+ days).    | Lower storage cost, costs more per access, still instant.  |
 | **Archive** | Long-term backups, compliance, rarely-if-ever read. | Lowest storage cost by far — but retrieval can take hours. |
 
-*Conceptual only this module — no live demo of tier changes (`az storage blob set-tier` if a student asks). Netflix analogy: new releases sit on Hot storage, the back-catalog sits in cheaper Cool/Archive storage — same content, different access pattern.*
+_Conceptual only this module — no live demo of tier changes (`az storage blob set-tier` if a student asks). Netflix analogy: new releases sit on Hot storage, the back-catalog sits in cheaper Cool/Archive storage — same content, different access pattern._
 
 ### 2.2 Live demo — SAS tokens: create, upload, private-by-default, generate access
 
@@ -151,7 +155,7 @@ $STORAGE = "stestiamdev2"
 az storage account create --name $STORAGE --resource-group $RG --location $LOCATION --sku Standard_LRS
 ```
 
-Creates the `posters` container — the same container used for both this mechanics demo and the Catalog app's real poster uploads (Section 2.3), deliberately, so the demo exercises the real thing rather than a throwaway. This step succeeded even *before* the role granted below was assigned — container create doesn't need the data-plane role, only blob upload does:
+Creates the `posters` container — the same container used for both this mechanics demo and the Catalog app's real poster uploads (Section 2.3), deliberately, so the demo exercises the real thing rather than a throwaway. This step succeeded even _before_ the role granted below was assigned — container create doesn't need the data-plane role, only blob upload does:
 
 ```powershell
 az storage container create --name posters --account-name $STORAGE --auth-mode login
@@ -164,6 +168,10 @@ az storage blob upload --account-name $STORAGE --container-name posters --name h
 ```
 
 `--auth-mode login` uses Azure AD authorization, which is SEPARATE from the account-level Owner role. Even as subscription Owner, the upload above was denied until the **"Storage Blob Data Contributor"** role was explicitly assigned. Azure splits control-plane permissions (Owner/Contributor — manage the resource itself) from data-plane permissions (Storage Blob Data Contributor/Reader — touch the data inside it), and not every container/blob operation draws that line in the same place — a natural preview of Module 3 (Security/RBAC). Gets the storage account's resource id, needed for the role assignment:
+
+```powershell
+az ad signed-in-user show --query id -o tsv
+```
 
 ```powershell
 az storage account show --name $STORAGE --resource-group $RG --query id --output tsv
@@ -191,7 +199,7 @@ Append the token to the plain URL from above as `<blob-url>?<sas-token>` and ope
 
 #### Issues & Fixes — Topic 2
 
-- **User-delegation SAS clock skew:** the very first request against a freshly generated `--as-user` SAS can 403 with `AuthenticationFailed` / "Signature not valid in the specified key time frame" — the delegation key's start time (`skt`) can land a second or so after the token was generated, and the request can arrive before that instant. Waiting a few seconds and retrying the *same* URL (no need to regenerate) resolves it. Worth showing live — it looks alarming the first time.
+- **User-delegation SAS clock skew:** the very first request against a freshly generated `--as-user` SAS can 403 with `AuthenticationFailed` / "Signature not valid in the specified key time frame" — the delegation key's start time (`skt`) can land a second or so after the token was generated, and the request can arrive before that instant. Waiting a few seconds and retrying the _same_ URL (no need to regenerate) resolves it. Worth showing live — it looks alarming the first time.
 
 ### 2.3 Live demo — poster upload in the Catalog API
 
