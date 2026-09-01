@@ -8,7 +8,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Because both apps use this same package, a single browser action shows up
 // as one correlated Operation Id spanning catalog-ui's Request AND its
 // HttpClient call to catalog-api as a Dependency (Module 4, Topic 2).
-builder.Services.AddOpenTelemetry().UseAzureMonitor();
+// UseAzureMonitor() throws at startup if no connection string is configured,
+// so it's skipped entirely when the env var/config is absent (e.g. local dev).
+var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrEmpty(appInsightsConnectionString))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor();
+}
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpClient("catalog-api", client =>

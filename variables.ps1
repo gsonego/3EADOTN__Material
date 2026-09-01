@@ -10,12 +10,12 @@
 
 # --- Module 1 ---
 $LOCATION = "westcentralus"
-$RG = "rg-estiam-dev-2"             # unique within your subscription
-$PLAN = "asp-estiam-dev-2"
-$ACR = "acrestiamdev2"              # must be globally unique across Azure
-$WEBAPP = "webapp-estiam-dev-2"     # must be globally unique across Azure
-$ENVNAME = "env-estiam-dev-2"
-$APP = "app-estiam-dev-2"
+$RG = "rg-estiam-dev-3"             # unique within your subscription
+$PLAN = "asp-estiam-dev-3"
+$ACR = "acrestiamdev3"              # must be globally unique across Azure
+$WEBAPP = "webapp-estiam-dev-3"     # must be globally unique across Azure
+$ENVNAME = "env-estiam-dev-3"
+$APP = "app-estiam-dev-3"
 
 # --- Module 2 ---
 $COSMOS = "cosmos-estiam-dev-2"       # must be globally unique across Azure
@@ -36,8 +36,8 @@ $FUNCLOCATION = "eastus"              # Function App compute only -- moved off w
 
 # --- Module 6 ---
 $AOAILOCATION = "swedencentral"       # Azure OpenAI is not offered in westcentralus -- its own region, like $FUNCLOCATION
-$AOAI         = "aoai-estiam-dev-2"   # must be globally unique across Azure (custom domain)
-$AOAIDEPLOY   = "gpt-5-mini"          # the model deployment's name, used in the request URL
+$AOAI = "aoai-estiam-dev-2"   # must be globally unique across Azure (custom domain)
+$AOAIDEPLOY = "gpt-5-mini"          # the model deployment's name, used in the request URL
 
 Write-Output "All variables declared."
 Write-Output "--------------------------------"
