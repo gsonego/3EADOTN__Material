@@ -189,10 +189,22 @@ az cosmosdb sql role definition list --account-name $COSMOS --resource-group $RG
 Grants yourself the Data Contributor role — needed so the Container App's identity (and your own `az login` session, for anyone running it locally) can authenticate. `--scope "/"` means the whole account — a real deployment might scope this to one database/container instead:
 
 ```powershell
+az ad signed-in-user show --query id --output tsv
+```
+
+```powershell
 az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id <Data Contributor id> --principal-id <your-object-id> --scope "/"
 ```
 
 Grants the same role to the Container App's managed identity from 2.2 — this is what lets the _deployed_ app skip Key Vault entirely:
+
+```powershell
+az containerapp identity show --name $APP --resource-group $RG --query principalId --output tsv
+```
+
+```powershell
+az cosmosdb show --name $COSMOS --resource-group $RG --query documentEndpoint --output tsv
+```
 
 ```powershell
 az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id <Data Contributor id> --principal-id <container-app-principal-id> --scope "/"
