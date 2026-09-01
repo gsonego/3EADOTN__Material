@@ -18,25 +18,25 @@ $ENVNAME = "env-estiam-dev-3"
 $APP = "app-estiam-dev-3"
 
 # --- Module 2 ---
-$COSMOS = "cosmos-estiam-dev-2"       # must be globally unique across Azure
-$STORAGE = "stestiamdev2"             # must be globally unique across Azure
+$COSMOS = "cosmos-estiam-dev-5"       # must be globally unique across Azure
+$STORAGE = "stestiamdev3"             # must be globally unique across Azure
 
 # --- Module 3 ---
-$KV = "kv-estiam-dev-2"               # must be globally unique across Azure
+$KV = "kv-estiam-dev-3"               # must be globally unique across Azure
 
 # --- Module 4 ---
-$LAW = "law-estiam-appi-dev-2"
-$APPI = "appi-estiam-dev-2"
+$LAW = "law-estiam-appi-dev-3"
+$APPI = "appi-estiam-dev-3"
 
 # --- Module 5 ---
-$APIM = "apim-estiam-dev-2"           # must be globally unique across Azure
-$EMAIL = "gsonego1@outlook.com"
-$FUNC = "func-estiam-dev-2"           # must be globally unique across Azure
+$APIM = "apim-estiam-dev-3"           # must be globally unique across Azure
+$EMAIL = "gsonego2@outlook.com"
+$FUNC = "func-estiam-dev-3"           # must be globally unique across Azure
 $FUNCLOCATION = "eastus"              # Function App compute only -- moved off westcentralus live, see manual Issues & Fixes
 
 # --- Module 6 ---
 $AOAILOCATION = "swedencentral"       # Azure OpenAI is not offered in westcentralus -- its own region, like $FUNCLOCATION
-$AOAI = "aoai-estiam-dev-2"   # must be globally unique across Azure (custom domain)
+$AOAI = "aoai-estiam-dev-3"   # must be globally unique across Azure (custom domain)
 $AOAIDEPLOY = "gpt-5-mini"          # the model deployment's name, used in the request URL
 
 Write-Output "All variables declared."
