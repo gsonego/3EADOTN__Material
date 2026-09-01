@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "poster_normalizer": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7298",
+      "launchBrowser": false
+    }
+  }
+}
