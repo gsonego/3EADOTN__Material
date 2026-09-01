@@ -181,6 +181,8 @@ Grants yourself the role — RBAC took under a minute to take effect when tested
 
 ```powershell
 az role assignment create --role "Storage Blob Data Contributor" --assignee <your-user-or-object-id> --scope <storage-account-resource-id>
+
+az role assignment create --role "Storage Blob Data Reader" --assignee <your-user-or-object-id> --scope <storage-account-resource-id>
 ```
 
 Prints the blob's plain URL:
@@ -213,6 +215,14 @@ docker build -t "${ACR}.azurecr.io/catalog-api:v4" .
 
 ```powershell
 docker push "${ACR}.azurecr.io/catalog-api:v4"
+```
+
+```powershell
+az cosmosdb keys list --type connection-strings --name $COSMOS --resource-group $RG --query "connectionStrings[0].connectionString" --output tsv
+```
+
+```powershell
+az storage account show-connection-string --name $STORAGE --resource-group $RG --query connectionString --output tsv
 ```
 
 ```powershell
