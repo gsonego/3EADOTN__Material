@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ExpensesApi</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- NOTE (2026-09-01): these are the latest stable versions known at authoring time.
+         NuGet restore was not reachable from the authoring sandbox to double-check —
+         run `dotnet restore` once on a machine with normal internet access and bump
+         any of these if a newer patch/minor version is offered; nothing here needs a
+         specific pin beyond "8.0.x/net8.0-compatible". -->
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.44.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.22.2" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.7.0" />
+    <PackageReference Include="Azure.Identity" Version="1.13.1" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.2.0" />
+  </ItemGroup>
+
+</Project>

@@ -31,13 +31,14 @@ $APPI = "appi-estiam-dev-3"
 # --- Module 5 ---
 $APIM = "apim-estiam-dev-3"           # must be globally unique across Azure
 $EMAIL = "gsonego2@outlook.com"
-$FUNC = "func-estiam-dev-3"           # must be globally unique across Azure
+$FUNC = "func-estiam-dev-4"           # must be globally unique across Azure
 $FUNCLOCATION = "eastus"              # Function App compute only -- moved off westcentralus live, see manual Issues & Fixes
 
 # --- Module 6 ---
 $AOAILOCATION = "swedencentral"       # Azure OpenAI is not offered in westcentralus -- its own region, like $FUNCLOCATION
 $AOAI = "aoai-estiam-dev-3"   # must be globally unique across Azure (custom domain)
 $AOAIDEPLOY = "gpt-5-mini"          # the model deployment's name, used in the request URL
+$AOAIMODELVER = "2025-08-07"
 
 Write-Output "All variables declared."
 Write-Output "--------------------------------"
@@ -60,4 +61,5 @@ Write-Output "FUNCLOCATION  ==> $FUNCLOCATION"
 Write-Output "AOAILOCATION  ==> $AOAILOCATION"
 Write-Output "AOAI          ==> $AOAI"
 Write-Output "AOAIDEPLOY    ==> $AOAIDEPLOY"
+Write-Output "AOAIMODELVER  ==> $AOAIMODELVER"
 Write-Output "--------------------------------"

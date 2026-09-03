@@ -12,20 +12,20 @@ This module continues directly in the shared course resource group from Modules 
 
 Two different questions get conflated constantly, and Azure treats them as two entirely separate mechanisms.
 
-| | Authentication (AuthN) | Authorization (AuthZ) |
-|---|---|---|
-| **Question** | "Who are you?" | "What are you allowed to do?" |
-| **Handled by** | Microsoft Entra ID | RBAC role assignments |
-| **Result** | A verified identity | Allowed / denied, per resource |
+|                | Authentication (AuthN) | Authorization (AuthZ)          |
+| -------------- | ---------------------- | ------------------------------ |
+| **Question**   | "Who are you?"         | "What are you allowed to do?"  |
+| **Handled by** | Microsoft Entra ID     | RBAC role assignments          |
+| **Result**     | A verified identity    | Allowed / denied, per resource |
 
 An identity can pass AuthN and still fail AuthZ — that's not a bug, it's the whole point of splitting them. The class already saw this twice without the vocabulary for it: Module 1's App Service and Container Apps deploys both needed **explicit registry credentials** to pull the Catalog images from a private ACR — the registry didn't just trust "your own" resources by default (an AuthN/AuthZ setup problem, solved there with an admin username/password). Module 2's Blob Storage demo showed **Owner** (a control-plane role) failing to authorize a data-plane operation — you were a fully authenticated Owner, but blob upload was still denied until the right data-plane role was granted (AuthZ). Today's demo makes a failure like that deliberate and then fixes it live — and along the way, removes the registry-credential workaround from Module 1 entirely.
 
 **Managed Identity** is Azure's answer to machine-to-machine AuthN: an identity Azure creates and manages for a specific resource, with no password that ever exists for a human to type, store, or leak.
 
-| Type | What it is |
-|---|---|
+| Type                | What it is                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------- |
 | **System-assigned** | Tied to one resource's lifecycle — created and destroyed with it. Used in today's demo. |
-| **User-assigned** | A standalone identity created once and attached to several resources. |
+| **User-assigned**   | A standalone identity created once and attached to several resources.                   |
 
 That identity has two possible destinations:
 
@@ -36,10 +36,10 @@ Today's demo shows both: the Key Vault fallback first (2.2), then the direct pat
 
 **RBAC** governs AuthZ, and it has a hard split worth repeating from Module 2:
 
-| | Control plane | Data plane |
-|---|---|---|
-| **Manages** | The resource itself (create/delete) | The data inside it (read/write) |
-| **Example roles** | Owner, Contributor | Storage Blob Data Contributor, Key Vault Secrets User/Officer, Cosmos DB Built-in Data Reader/Contributor |
+|                   | Control plane                       | Data plane                                                                                                |
+| ----------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Manages**       | The resource itself (create/delete) | The data inside it (read/write)                                                                           |
+| **Example roles** | Owner, Contributor                  | Storage Blob Data Contributor, Key Vault Secrets User/Officer, Cosmos DB Built-in Data Reader/Contributor |
 
 Owner on a subscription or resource group never implies data-plane access. This was true for Blob Storage (Module 2) and is equally true for Key Vault and Cosmos DB's data-plane roles (this module — and note the Cosmos DB data-plane roles use their own separate command, `az cosmosdb sql role assignment create`, not the generic `az role assignment create`).
 
@@ -55,11 +55,11 @@ Three parts, each built and verified before the next: Key Vault first (the class
 
 A hardened, audited store for secrets, keys, and certificates — not a general-purpose database. Three things it holds:
 
-| Type | Examples |
-|---|---|
-| **Secrets** | Connection strings, API keys, passwords — arbitrary strings |
-| **Keys** | Cryptographic keys for encrypt/sign — material never leaves the vault |
-| **Certificates** | TLS certs, with auto-renewal |
+| Type             | Examples                                                              |
+| ---------------- | --------------------------------------------------------------------- |
+| **Secrets**      | Connection strings, API keys, passwords — arbitrary strings           |
+| **Keys**         | Cryptographic keys for encrypt/sign — material never leaves the vault |
+| **Certificates** | TLS certs, with auto-renewal                                          |
 
 Two setup details break the demo if missed:
 
@@ -204,7 +204,7 @@ Grants yourself the Data Contributor role — needed so the Container App's iden
 az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id $COSMOS_ROLE_ID --principal-id $MY_OBJECT_ID --scope "/"
 ```
 
-Grants the same role to the Container App's managed identity from 2.2 — this is what lets the *deployed* app skip Key Vault entirely:
+Grants the same role to the Container App's managed identity from 2.2 — this is what lets the _deployed_ app skip Key Vault entirely:
 
 ```powershell
 az cosmosdb sql role assignment create --account-name $COSMOS --resource-group $RG --role-definition-id $COSMOS_ROLE_ID --principal-id $APP_PRINCIPAL_ID --scope "/"
@@ -259,6 +259,10 @@ $ACR_ID = az acr show --name $ACR --resource-group $RG --query id --output tsv
 ```
 
 Grants `AcrPull` to the Container App's identity from 2.2/2.3 — one identity, three different destinations across this module:
+
+```powershell
+$APP_PRINCIPAL_ID = az containerapp identity assign --name $APP --resource-group $RG --system-assigned --query principalId --output tsv
+```
 
 ```powershell
 az role assignment create --role "AcrPull" --assignee $APP_PRINCIPAL_ID --scope $ACR_ID

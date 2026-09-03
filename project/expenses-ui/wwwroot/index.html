@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ExpenseTrack — Nimbus Expensing</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="display brand-name">ExpenseTrack</span>
+        <span class="brand-sub">Nimbus Expensing Ltd.</span>
+      </div>
+      <div class="topbar-actions">
+        <button id="endpoint-pill" class="endpoint-pill" type="button">
+          <span class="endpoint-dot" id="endpoint-dot"></span>
+          <span class="mono" id="endpoint-label">No endpoint set</span>
+        </button>
+        <button id="open-modal" class="btn-primary" type="button">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+          Add expense
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <div id="banners"></div>
+
+      <section class="card stat-card">
+        <div class="stat-label">This month</div>
+        <div class="display stat-value num" id="stat-total">€0.00</div>
+        <div class="stat-sub" id="stat-sub">across 0 categories</div>
+      </section>
+
+      <div class="content-grid">
+        <section class="card table-card">
+          <div class="display card-title table-title">Expenses</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th class="num-col">Amount</th>
+                <th>Receipt</th>
+                <th class="actions-col"></th>
+              </tr>
+            </thead>
+            <tbody id="expense-rows">
+              <tr><td colspan="6" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="card chart-card">
+          <div class="display card-title">By category</div>
+          <div id="category-bars"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <span class="display modal-title">Log an expense</span>
+        <button id="close-modal" class="modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <form id="expense-form">
+        <div class="field">
+          <label for="category">Category</label>
+          <select id="category" name="category" class="field-input" required></select>
+        </div>
+        <div class="field">
+          <label for="description">Description</label>
+          <input id="description" name="description" class="field-input" type="text" placeholder="e.g. Weekly shop" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="amount">Amount (EUR)</label>
+            <input id="amount" name="amount" class="field-input" type="number" min="0.01" step="0.01" required />
+          </div>
+          <div class="field">
+            <label for="date">Date</label>
+            <input id="date" name="date" class="field-input" type="date" required />
+          </div>
+        </div>
+        <div class="field">
+          <label for="photo">Receipt photo (optional)</label>
+          <input id="photo" name="photo" class="field-input" type="file" accept="image/*" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="cancel-modal" class="btn-ghost">Cancel</button>
+          <button type="submit" class="btn-primary">Save expense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="settings-modal-backdrop" class="modal-backdrop" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <span class="display modal-title">API endpoint</span>
+          <div class="modal-subtitle">Point this app at your deployed Expenses API (APIM gateway). Saved on this device only.</div>
+        </div>
+        <button id="close-settings-modal" class="modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div class="field">
+        <label for="settings-base-url">Base URL</label>
+        <input id="settings-base-url" class="field-input mono" type="text" placeholder="https://your-apim.azure-api.net/expenses" />
+      </div>
+      <div class="field">
+        <label for="settings-api-key">Subscription key</label>
+        <input id="settings-api-key" class="field-input mono" type="password" />
+      </div>
+      <div class="status-line">
+        <span class="endpoint-dot" id="settings-status-dot"></span>
+        <span id="settings-status-text">Not tested yet</span>
+      </div>
+
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button type="button" id="test-connection-btn" class="btn-ghost">Test connection</button>
+        <div style="display:flex; gap:10px;">
+          <button type="button" id="cancel-settings-btn" class="btn-ghost">Cancel</button>
+          <button type="button" id="save-settings-btn" class="btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
